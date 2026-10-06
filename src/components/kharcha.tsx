@@ -44,7 +44,7 @@ import Commitments from "./commitments";
 import BillScanner from "./bill-scanner";
 import { ReceiptSuggestion } from "@/lib/receipts";
 import Planning from "./planning";
-import MoneySpace from "./money-space";
+import FinanceHub from "./finance-hub";
 import BackupTools from "./backup-tools";
 import DateField from "./date-field";
 import {
@@ -196,6 +196,12 @@ export default function Kharcha() {
     amountInput.current?.focus();
   }
   function edit(e: Expense) {
+    if (e.debtEventId) {
+      setError(
+        "This interest is linked to Udharo. Correct the movement under Accounts → Udharo.",
+      );
+      return;
+    }
     setEditing(e);
     setCurrency(e.currency);
     setAmount((e.amountMinor / 100).toFixed(2));
@@ -319,6 +325,12 @@ export default function Kharcha() {
         createdAt: editing?.createdAt || now,
         updatedAt: now,
         userId: null,
+        ...(editing?.importKeys
+          ? {
+              importKeys: editing.importKeys,
+              importBatchId: editing.importBatchId,
+            }
+          : {}),
         kind: transfer ? "transfer" : "expense",
         cardId: transfer
           ? editing?.cardId
@@ -356,6 +368,12 @@ export default function Kharcha() {
     }
   }
   function remove(id: string) {
+    if (expenses.find((e) => e.id === id)?.debtEventId) {
+      setError(
+        "Remove this interest through its Udharo movement under Accounts → Udharo.",
+      );
+      return;
+    }
     if (expenses.find((e) => e.id === id)?.scheduleId) {
       setError(
         "This payment advances a recurring schedule. Edit its details instead of deleting it.",
@@ -746,7 +764,7 @@ export default function Kharcha() {
                 />
               )}
               {tab === "money" && !blocked && (
-                <MoneySpace
+                <FinanceHub
                   currency={currency}
                   revision={revision}
                   onChange={refresh}

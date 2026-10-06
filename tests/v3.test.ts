@@ -217,7 +217,7 @@ test("old unlinked expenses remain spending without changing new opening balance
 });
 test("backup validation rejects duplicates, cross-currency links and predating account openings", () => {
   const s = state();
-  assert.equal(parseLedger(JSON.stringify(s)).version, 3);
+  assert.equal(parseLedger(JSON.stringify(s)).version, 4);
   assert.throws(
     () => parseLedger(JSON.stringify({ ...s, expenses: [expense, expense] })),
     /duplicate/,
@@ -265,7 +265,7 @@ test("V2 migration preserves existing records and restore keeps exact recovery c
   values.set(STORAGE_KEY, JSON.stringify(v2));
   const migrated = readLedger();
   assert.equal(migrated.expenses.length, 1);
-  assert.equal(migrated.version, 3);
+  assert.equal(migrated.version, 4);
   assert.deepEqual(migrated.accounts, []);
   const previous = values.get(STORAGE_KEY);
   restoreLedger(JSON.stringify(state()));

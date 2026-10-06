@@ -197,6 +197,11 @@ export default function BackupTools({
                       {preview.plans?.length || 0} budgets
                     </p>
                   </div>
+                  <p className="muted">
+                    {preview.debts?.length || 0} Udharo ·{" "}
+                    {preview.debtEvents?.length || 0} debt movements ·{" "}
+                    {preview.imports?.length || 0} imports
+                  </p>
                   <label className="review-check">
                     <input
                       type="checkbox"

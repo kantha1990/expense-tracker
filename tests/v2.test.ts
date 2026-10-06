@@ -119,7 +119,7 @@ test("V1 Home records migrate without changing payment meaning; future saves pre
   writeLedger({ ...readLedger(), cards: [card] });
   localExpenseRepository.save([]);
   assert.equal(readLedger().cards.length, 1);
-  assert.equal(readLedger().version, 3);
+  assert.equal(readLedger().version, 4);
   raw = JSON.stringify({
     version: 2,
     expenses: [],

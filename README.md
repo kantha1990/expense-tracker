@@ -1,6 +1,6 @@
 # Kharcha
 
-Mobile-first household expense planner built with Next.js App Router, TypeScript and React. NPR is the default. Installable PWA; V3 records stay in the browser/device.
+Mobile-first household expense planner built with Next.js App Router, TypeScript and React. NPR is the default. Installable PWA; V4 records stay in the browser/device.
 
 ## Run and verify
 
@@ -26,7 +26,7 @@ Node.js 20.9+ is required. Production uses Next.js static export to `out/`; serv
 - EMI/monthly bill schedules: due dates, remaining count and manually entered fixed principal/interest split. Mark paid adds one expense and advances schedule in one local write. Month ends clamp to the correct day. Repeated payments are rejected. Scheduled expenses can be edited but not deleted because they advance the schedule.
 - On-device English/English+Nepali bill OCR with camera/upload, amount/category/date suggestions and required review before saving. No photo upload or storage. JPG/PNG/WebP/BMP up to 15 MB; no PDF/HEIC. A first scan needs scanner downloads; assets can be cached thereafter. Real Nepali photo accuracy has not been benchmarked.
 - Expense search, category/payment filters; income/account transfer history in Accounts.
-- JSON backup export and restore with preview, full validation and explicit replacement confirmation. Restore accepts V1/V2/V3 files up to 5 MB and keeps previous device data for recovery. Restore replaces; it does not merge. A restore error leaves the ledger intact.
+- JSON backup export and restore with preview, full validation and explicit replacement confirmation. Restore accepts V1/V2/V3/V4 files up to 5 MB and keeps previous device data for recovery. Restore replaces; it does not merge. A restore error leaves the ledger intact.
 - PWA manifest, icons, service worker, install help, mobile safe-area navigation and accessible native dialogs.
 
 ## Accounting and estimate limits
@@ -35,7 +35,7 @@ Amounts are integer minor units. NPR, INR and USD are filtered independently; th
 
 Opening balance is the account balance at the start of its opening date. Linked records on/after that date change it; linking earlier records is rejected. Legacy expenses stay unlinked until edited and do not change newly added balances. Account/card deletion is blocked when history or schedules depend on it.
 
-Available estimate = recorded account balances − positive tracked card outstanding − unpaid scheduled bills through period end (including overdue instalments) − remaining savings reserve. Expected income is excluded until received. Card repayment reduces cash and card liability equally, avoiding double subtraction. Paid scheduled bills reduce account cash and release their reserve; a bill marked paid without an account link makes the estimate incomplete. Non-card unlinked expenses since the first tracked account opening date trigger a warning (or the active period if no account exists). Users must reconcile against actual balances before relying on the estimate.
+Available estimate = recorded account balances − positive tracked card outstanding − unpaid scheduled bills through period end (including overdue instalments) − borrowed Udharo principal due through period end − remaining savings reserve. Expected income is excluded until received. Card repayment reduces cash and card liability equally, avoiding double subtraction. Paid scheduled bills reduce account cash and release their reserve; a bill marked paid without an account link makes the estimate incomplete. Non-card unlinked expenses since the first tracked account opening date trigger a warning (or the active period if no account exists). Users must reconcile against actual balances before relying on the estimate.
 
 All tracked accounts are included; there is no special excluded savings/investment account yet. Savings reserve means the amount still to set aside; reduce it after transferring savings outside tracked accounts. Category caps are independent from the overall budget.
 
@@ -43,7 +43,7 @@ The full EMI amount remains in spending/cash-outflow totals. Its principal/inter
 
 ## Persistence, recovery and privacy
 
-Schema V3 uses the stable `kharcha.expenses.v1` key. V1 `Home` migrates to Household; generic `Card` remains generic. V2 expenses, credit cards and schedules are preserved. `kharcha.before-restore` keeps the immediate previous raw ledger after a restore; preview it with Restore backup → Preview previous device data. Export backups regularly. Clearing browser/site storage deletes both copies; changing a domain does not move data automatically.
+Schema V4 uses the stable `kharcha.expenses.v1` key. V1 `Home` migrates to Household; generic `Card` remains generic. V2 expenses, credit cards and schedules, plus V3 accounts/entries/budgets, are preserved. `kharcha.before-restore` keeps the immediate previous raw ledger after a restore; preview it with Restore backup → Preview previous device data. Export backups regularly. Clearing browser/site storage deletes both copies; changing a domain does not move data automatically.
 
 No cloud sync, in-app authentication or family sharing is implemented. Local data and JSON backups are not encrypted. Hosting access controls do not provide cross-device financial sync. Concurrent local-tab writes are best effort; single-record edit timestamps detect common stale edits but do not make localStorage transactional.
 
@@ -56,6 +56,26 @@ Open once online over HTTPS. Android Chrome: browser menu → Install app. iPhon
 ## Security
 
 No secrets or environment files are required. `.env` and `.env.*` are ignored. Never commit user ledgers, bill photos, private statement fixtures, API secrets or credentials. Keep privileged keys out of browser code. Future authentication and cloud sync require owner-specific access controls and verified recovery/conflict tests.
+
+## V4: Udharo and statement imports
+
+Open **Accounts → Udharo** or **Accounts → Import statement**.
+
+Udharo supports money lent/borrowed, an existing outstanding balance or a new loan with an account cash movement, further advances, partial repayments, optional interest, due dates, metadata edits and movement history. Principal is excluded from ordinary spending and income. Borrower interest creates one linked expense; lender interest creates one linked income entry. Removing a movement removes linked interest atomically, with overpayment/chronology checks. Correct a movement by removing it and entering the corrected movement; an advance with dependent repayments cannot be removed until those repayments are handled. Interest entries are protected against independent edits/deletion.
+
+A borrowed principal balance with an expected repayment date through budget period end is reserved in the available estimate. Debts without a due date trigger a warning and are not reserved. Lent money is not included in available cash until received. Due dates are entered as AD; display follows the selected calendar. New debt movement dates support AD/BS entry. No automatic interest calculation, legal debt enforcement, background reminders or messages.
+
+Statement imports run locally from UTF-8 CSV/TSV files or pasted spreadsheet rows. No provider login or remote upload. Download the header-only template in the app, fill it with your own records, and preview before importing. Max 2 MB and 2,000 transactions per import. Numeric date formats: AD YMD/DMY/MDY or BS YMD. Amount formats: separate positive Debit/Credit columns, signed negative-out/positive-in, or positive outgoing-only. Amounts allow dot decimals and validated Western/Indian comma grouping; Nepali digits are normalized. Optional currency columns and explicit currency tokens must match the selected account. Invalid rows are shown and excluded; choose valid rows to import.
+
+Map columns and the header row, then classify outgoing/incoming transactions as expense, income, own-account transfer, Udharo movement or bank-funded credit-card repayment. Incoming rows are not selected as income automatically. Create the linked Udharo/card/accounts before classifying their movements. For a loan recorded manually already, link the matching existing movement instead of adding it again. Principal/fees/interest must be classified using the source statement and agreed split.
+
+The selected account needs its balance from the start of the earliest imported date. Rows before its opening date are rejected; do not use today's closing balance plus historical transactions, which would count them twice. The CSV importer does not reconcile opening/closing statement balances automatically.
+
+Import deduplication uses canonical AD date, account/currency, direction and reference when mapped, or normalized description/amount plus occurrence rank otherwise. Use a genuinely unique transaction reference column when available. Amount corrections with the same reference/date/direction are treated as already imported; correct the existing record. Repeated identical rows without references need explicit review, and overlapping statements without stable references can still be ambiguous. Fingerprints are retained through edits and JSON backup/restore.
+
+Possible existing matches (same account—or an unlinked manual expense—date, amount and direction) require review: skip, link the existing record, or explicitly add a separate transaction. Matching a transfer from its other-account statement attaches a second fingerprint to the same transfer, preserving balances. Linking preserves the existing record's type/category, and links an untracked manual expense to the selected account. New possible matches after preview require a fresh review. Import history records each batch; actual income/transfer/expense/debt records remain editable/removable through their respective screens. Deleting a record also removes its import identity, so a later import can recreate it.
+
+Supported statement formats are generic configurable CSV/TSV, not verified provider-specific bank/eSewa/Khalti layouts. PDF, XLS/XLSX, transaction screenshot extraction and direct bank/wallet synchronization are future work. Export/convert these to UTF-8 CSV first. No actual private bank statements were used as fixtures.
 
 ## Future releases
 

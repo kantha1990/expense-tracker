@@ -6,7 +6,9 @@ import {
   isPlan,
   validateLinks,
 } from "./finance";
-// Stable key preserves V1/V2 records; new writes use schema V3.
+import { isDebt, isDebtEvent } from "./debts";
+import { isImportBatch } from "./imports";
+// Stable key preserves V1/V2/V3 records; new writes use schema V4.
 export const STORAGE_KEY = "kharcha.expenses.v1";
 export const RECOVERY_KEY = "kharcha.before-restore";
 export interface ExpenseRepository {
@@ -28,14 +30,14 @@ export function parseLedger(raw: string): Ledger {
   }
   if (
     !parsed ||
-    ![1, 2, 3].includes(parsed.version) ||
+    ![1, 2, 3, 4].includes(parsed.version) ||
     !Array.isArray(parsed.expenses)
   )
     throw Error("This is not a supported Kharcha backup.");
   const base = emptyLedger();
   const state: Ledger = {
     ...base,
-    version: 3,
+    version: 4,
     expenses: parsed.expenses.map((x: Expense) =>
       x && typeof x === "object"
         ? {
@@ -47,12 +49,21 @@ export function parseLedger(raw: string): Ledger {
     ),
     cards: parsed.version === 1 ? [] : parsed.cards,
     recurring: parsed.version === 1 ? [] : parsed.recurring,
-    accounts: parsed.version === 3 ? parsed.accounts : [],
-    entries: parsed.version === 3 ? parsed.entries : [],
-    plans: parsed.version === 3 ? parsed.plans : [],
-    dateDisplay: parsed.version === 3 ? parsed.dateDisplay : "AD",
+    accounts: parsed.version >= 3 ? parsed.accounts : [],
+    entries: parsed.version >= 3 ? parsed.entries : [],
+    plans: parsed.version >= 3 ? parsed.plans : [],
+    dateDisplay: parsed.version >= 3 ? parsed.dateDisplay : "AD",
+    debts: parsed.version === 4 ? parsed.debts : [],
+    debtEvents: parsed.version === 4 ? parsed.debtEvents : [],
+    imports: parsed.version === 4 ? parsed.imports : [],
   };
   if (
+    !Array.isArray(state.debts) ||
+    !state.debts.every(isDebt) ||
+    !Array.isArray(state.debtEvents) ||
+    !state.debtEvents.every(isDebtEvent) ||
+    !Array.isArray(state.imports) ||
+    !state.imports.every(isImportBatch) ||
     !state.expenses.every(isExpense) ||
     !Array.isArray(state.cards) ||
     !state.cards.every(isCard) ||
@@ -68,6 +79,9 @@ export function parseLedger(raw: string): Ledger {
   )
     throw Error("Some backup records are invalid. Nothing has been replaced.");
   for (const list of [
+    state.debts!,
+    state.debtEvents!,
+    state.imports!,
     state.expenses,
     state.cards,
     state.recurring,
@@ -82,6 +96,15 @@ export function parseLedger(raw: string): Ledger {
   }
   if (new Set(state.plans.map((p) => p.currency)).size !== state.plans.length)
     throw Error("Backup contains duplicate currency budgets.");
+  const importKeys = [
+    ...state.expenses,
+    ...(state.entries || []),
+    ...(state.debtEvents || []),
+  ].flatMap((e) => e.importKeys || []);
+  if (new Set(importKeys).size !== importKeys.length)
+    throw Error(
+      "Duplicate import fingerprints are linked to multiple records.",
+    );
   validateLinks(state);
   return state;
 }
@@ -90,7 +113,7 @@ export function readLedger(): Ledger {
   return raw ? parseLedger(raw) : emptyLedger();
 }
 export function writeLedger(state: Ledger) {
-  const normalized = { ...emptyLedger(), ...state, version: 3 };
+  const normalized = { ...emptyLedger(), ...state, version: 4 };
   parseLedger(JSON.stringify(normalized));
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
 }

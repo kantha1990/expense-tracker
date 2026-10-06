@@ -9,7 +9,9 @@ import {
   isSpending,
   nextMonthlyDate,
   validDate,
+  validRecordMeta,
 } from "./expenses";
+import { debtBalance, debtCashChange, validateDebts } from "./debts";
 import { budgetPeriod } from "./calendar";
 export const accountKinds = [
   "Cash",
@@ -38,6 +40,9 @@ export type MoneyEntry = {
   createdAt: string;
   updatedAt: string;
   userId: string | null;
+  debtEventId?: string;
+  importKeys?: string[];
+  importBatchId?: string;
 };
 export type BudgetPlan = {
   currency: Currency;
@@ -56,7 +61,7 @@ export const defaultPlan = (currency: Currency): BudgetPlan => ({
   categoryLimits: {},
 });
 export const emptyLedger = (): Ledger => ({
-  version: 3,
+  version: 4,
   expenses: [],
   cards: [],
   recurring: [],
@@ -64,6 +69,9 @@ export const emptyLedger = (): Ledger => ({
   entries: [],
   plans: [],
   dateDisplay: "AD",
+  debts: [],
+  debtEvents: [],
+  imports: [],
 });
 export function validMinor(value: unknown): value is number {
   return (
@@ -105,7 +113,8 @@ export function isEntry(value: unknown): value is MoneyEntry {
     validDate(e.date) &&
     typeof e.createdAt === "string" &&
     typeof e.updatedAt === "string" &&
-    (e.userId === null || typeof e.userId === "string")
+    (e.userId === null || typeof e.userId === "string") &&
+    validRecordMeta(e)
   );
 }
 export function isPlan(value: unknown): value is BudgetPlan {
@@ -154,6 +163,18 @@ export function accountBalance(
     )
       balance -= e.amountMinor;
   }
+  for (const e of state.debtEvents || []) {
+    if (
+      e.accountId !== account.id ||
+      e.date < account.openingDate ||
+      e.date > asOf
+    )
+      continue;
+    const d = state.debts?.find(
+      (d) => d.id === e.debtId && d.currency === account.currency,
+    );
+    if (d) balance += debtCashChange(d, e);
+  }
   return balance;
 }
 export function compatibleAccounts(
@@ -176,6 +197,7 @@ export function compatibleAccounts(
   );
 }
 export function validateLinks(state: Ledger) {
+  validateDebts(state);
   const accounts = state.accounts || [],
     entries = state.entries || [];
   const findAccount = (id: string, currency: Currency, date?: string) => {
@@ -186,6 +208,7 @@ export function validateLinks(state: Ledger) {
       );
     return a;
   };
+  for (const b of state.imports || []) findAccount(b.accountId, b.currency);
   for (const e of entries) {
     findAccount(e.toAccountId, e.currency, e.date);
     if (e.fromAccountId) findAccount(e.fromAccountId, e.currency, e.date);
@@ -274,7 +297,25 @@ export function planningSummary(
       remaining--;
     }
   }
-  const available = cash - outstanding - bills - plan.savingsReserveMinor;
+  const borrowedDue = (state.debts || [])
+    .filter(
+      (d) =>
+        d.currency === currency &&
+        d.direction === "borrowed" &&
+        d.date <= today &&
+        d.dueDate &&
+        d.dueDate <= period.end,
+    )
+    .reduce((s, d) => s + debtBalance(d, state, today), 0);
+  const unscheduledBorrowed = (state.debts || []).filter(
+    (d) =>
+      d.currency === currency &&
+      d.direction === "borrowed" &&
+      !d.dueDate &&
+      debtBalance(d, state, today) > 0,
+  ).length;
+  const available =
+    cash - outstanding - bills - borrowedDue - plan.savingsReserveMinor;
   const openings = (state.accounts || [])
     .filter((a) => a.currency === currency && a.openingDate <= today)
     .map((a) => a.openingDate)
@@ -296,6 +337,8 @@ export function planningSummary(
     cash,
     outstanding,
     bills,
+    borrowedDue,
+    unscheduledBorrowed,
     available,
     unlinked,
     hasAccounts: (state.accounts || []).some(

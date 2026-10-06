@@ -131,14 +131,21 @@ export default function Planning({
       <p className="section-help">
         An estimate from tracked accounts, after reserving all tracked card
         balances, unpaid scheduled bills through{" "}
-        {displayDate(summary.period.end, ledger.dateDisplay)}, and savings.
-        Expected salary is excluded until received.
+        {displayDate(summary.period.end, ledger.dateDisplay)}, borrowed
+        principal due by then, and savings. Expected salary is excluded until
+        received.
       </p>
       {summary.unlinked > 0 && (
         <p className="coverage-warning">
           {summary.unlinked} expense{summary.unlinked > 1 ? "s are" : " is"} not
           linked to an account since tracking began. Check your balances before
           relying on this estimate.
+        </p>
+      )}
+      {summary.unscheduledBorrowed > 0 && (
+        <p className="coverage-warning">
+          {summary.unscheduledBorrowed} borrowed Udharo record(s) have no due
+          date. Their principal is not reserved in this estimate.
         </p>
       )}
       <div className="plan-metrics">
@@ -151,8 +158,10 @@ export default function Planning({
           <strong>{money(summary.outstanding, currency)}</strong>
         </div>
         <div>
-          <span>Unpaid bills</span>
-          <strong>{money(summary.bills, currency)}</strong>
+          <span>Unpaid bills & due Udharo</span>
+          <strong>
+            {money(summary.bills + summary.borrowedDue, currency)}
+          </strong>
         </div>
         <div>
           <span>Savings reserve</span>

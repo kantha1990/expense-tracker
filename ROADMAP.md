@@ -8,7 +8,7 @@ A household money planner for people in Nepal: see what remains until payday acr
 
 Keep quick entry, mobile performance, clear money accounting and optional local-only use central. NPR formatting, categories and receipt scanning alone are common tracker features. Nepal-specific calendar, reliable imports and household workflows should earn repeat use.
 
-## Release 3 — implemented now
+## Release 3 — implemented foundation
 
 | Capability           | Scope                                                                                                                                                        |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -23,7 +23,7 @@ Keep quick entry, mobile performance, clear money accounting and optional local-
 
 Local records and backups are not encrypted. There is no live provider sync, financial app login, shared household, automatic payment execution or background reminder. NPR/INR/USD remain separate ledgers without exchange conversion. Balances are user-maintained estimates.
 
-## Next — durability and cloud sync (Release 4)
+## Next — durability and cloud sync (planned Release 5)
 
 Prerequisites: choose the Supabase project and deploy environment; define retention/deletion policy and sign-in experience before connecting real user data.
 
@@ -36,17 +36,17 @@ Prerequisites: choose the Supabase project and deploy environment; define retent
 
 Ship gate: airplane-mode writes recover on reconnect without duplicates; two devices editing one record resolve safely; another user's records are inaccessible; a lost-device recovery reproduces account balances and schedules exactly.
 
-## Then — trustworthy local imports and Udharo (Release 5)
+## Release 4 — local CSV imports and Udharo (implemented)
 
-- Start from user-supplied bank/wallet statements and transaction screenshots. Request representative redacted formats before implementing each importer; do not assume CSV/PDF support across providers.
-- Define parser adapters by provider + format version, with original row hashes and normalized transactions. Preview dates, signs, currency, transfers and duplicate matches before applying an import.
-- Detect bank-to-wallet loading and cash withdrawals as transfers; separate fees as expenses. Confirm matches instead of silently pairing uncertain records.
-- Add Udharo: money lent/borrowed, opening debts, partial repayments and outstanding balances. Borrowing is a liability, not salary; principal repayments clear debts, while interest is an expense.
-- Add Roman Nepali text shortcuts such as “tarkari 250 cash”; suggestions require review. Evaluate speech recognition by device/language/privacy support before committing to voice entry.
+- Generic user-supplied CSV/TSV imports and pasted spreadsheet rows are implemented. PDF/screenshot/provider-specific parsers remain future work. Request representative redacted formats before implementing each importer; do not assume CSV/PDF support across providers.
+- Configurable column/date/amount mapping is implemented; provider-specific adapters will be versioned. Store normalized fingerprint identities and import-batch metadata. Preview dates, signs, currency, transfers and duplicate matches before applying an import.
+- Transfers, Udharo and bank-funded card repayments can be selected during import review; separate fees as expenses. Confirm matches instead of silently pairing uncertain records.
+- Implemented Udharo: money lent/borrowed, opening debts, partial repayments and outstanding balances. Borrowing is a liability, not salary; principal repayments clear debts, while interest is an expense.
+- Future: add Roman Nepali text shortcuts such as “tarkari 250 cash”; suggestions require review. Evaluate speech recognition by device/language/privacy support before committing to voice entry.
 
 Ship gate: importing the same statement twice creates no duplicate entries; known fixture totals reconcile; transfers do not inflate spending; debt repayments count once. Direct consumer sync waits for approved provider access—merchant payment APIs do not imply access to an individual's complete wallet history.
 
-## Then — shared household and Nepal savings goals (Release 6)
+## Then — shared household and Nepal savings goals (planned Release 6)
 
 - Shared household with explicit invitations and owner/member permissions. Keep personal accounts private unless selected for sharing; offer member attribution and household totals.
 - Festival and family savings pots: Dashain, Tihar, Chhath, weddings, school admissions and emergency fund. Set targets and reserve transfers without treating contributions as consumption.
@@ -56,7 +56,7 @@ Ship gate: importing the same statement twice creates no duplicate entries; know
 
 Ship gate: members can access only shared records; leaving a household has defined data behavior; shared edits cannot lose records; savings allocations do not double-count expenses; festival dates use a maintained source or explicit user entry.
 
-## Later — receipt quality, debt detail and currency conversion (Release 7)
+## Later — receipt quality, debt detail and currency conversion (planned Release 7)
 
 - Benchmark receipt recognition on diverse Nepali/English bills and phone photos. Show confidence for totals/dates and track reviewed corrections locally or only with explicit consent.
 - Receipt line-item splits, discounts/VAT allocation, duplicate bill detection and optional original receipt attachment. Preserve one reconciled bill total.
@@ -78,7 +78,9 @@ Interview users who stop logging: discover whether effort, missing accounts, unr
 - `finance.ts`: account, income/transfer and budget contracts, integer amounts, accounting and link checks.
 - `calendar.ts`: one isolated BS conversion adapter; stored transaction dates remain AD.
 - `storage.ts`: versioned migration, validated local repository and restore/recovery boundary.
-- Future modules: `sync`, `imports/providers`, `debts`, `households`, `goals`, `notifications`, `fx`. Add only when their milestone ships.
+- `debts.ts`: principal cash flows, outstanding balances and linked interest validation.
+- `imports.ts`: CSV normalization, reviewed batch application, fingerprint identities and existing-movement linking.
+- Future modules: `sync`, `imports/providers`, `households`, `goals`, `notifications`, `fx`. Add only when their milestone ships.
 - Keep user transactions, bill images, statement samples, credentials, tokens and environment files out of source control.
 
 ## Research references

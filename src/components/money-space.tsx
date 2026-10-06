@@ -146,6 +146,12 @@ export default function MoneySpace({
               createdAt: editing?.createdAt || now,
               updatedAt: now,
               userId: null,
+              ...(editing?.importKeys
+                ? {
+                    importKeys: editing.importKeys,
+                    importBatchId: editing.importBatchId,
+                  }
+                : {}),
             };
             return {
               ...s,
@@ -219,7 +225,11 @@ export default function MoneySpace({
                               e.toAccountId === a.id ||
                               e.fromAccountId === a.id,
                           ) ||
-                          s.recurring.some((r) => r.accountId === a.id)
+                          s.recurring.some((r) => r.accountId === a.id) ||
+                          (s.debtEvents || []).some(
+                            (e) => e.accountId === a.id,
+                          ) ||
+                          (s.imports || []).some((b) => b.accountId === a.id)
                         )
                           throw Error(
                             "This account is linked to history or schedules.",
@@ -458,6 +468,12 @@ export default function MoneySpace({
                 className="edit-expense"
                 aria-label={`Edit ${e.note || e.kind} money entry`}
                 onClick={() => {
+                  if (e.debtEventId) {
+                    setError(
+                      "Correct this interest through the linked Udharo movement.",
+                    );
+                    return;
+                  }
                   setEditing(e);
                   setEntryKind(e.kind);
                   setAmount((e.amountMinor / 100).toFixed(2));
@@ -476,6 +492,12 @@ export default function MoneySpace({
                 className="delete"
                 aria-label={`Delete ${e.note || e.kind} money entry`}
                 onClick={() => {
+                  if (e.debtEventId) {
+                    setError(
+                      "Remove this interest through the linked Udharo movement.",
+                    );
+                    return;
+                  }
                   if (
                     confirm(
                       "Delete this money entry? Account balances will change.",

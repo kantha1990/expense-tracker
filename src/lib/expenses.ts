@@ -69,6 +69,9 @@ export type Expense = {
   scheduleId?: string;
   scheduledFor?: string;
   accountId?: string;
+  debtEventId?: string;
+  importKeys?: string[];
+  importBatchId?: string;
 };
 export type CardAccount = {
   id: string;
@@ -93,7 +96,7 @@ export type Recurring = {
   accountId?: string;
 };
 export type Ledger = {
-  version: 2 | 3;
+  version: 2 | 3 | 4;
   expenses: Expense[];
   cards: CardAccount[];
   recurring: Recurring[];
@@ -101,6 +104,9 @@ export type Ledger = {
   entries?: import("./finance").MoneyEntry[];
   plans?: import("./finance").BudgetPlan[];
   dateDisplay?: "AD" | "BS";
+  debts?: import("./debts").Debt[];
+  debtEvents?: import("./debts").DebtEvent[];
+  imports?: import("./imports").ImportBatch[];
 };
 export function localDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -157,7 +163,24 @@ export function isExpense(x: unknown): x is Expense {
     (e.interestMinor === undefined || minor(e.interestMinor)) &&
     (e.scheduleId === undefined || typeof e.scheduleId === "string") &&
     (e.scheduledFor === undefined || validDate(e.scheduledFor)) &&
-    (e.accountId === undefined || typeof e.accountId === "string")
+    (e.accountId === undefined || typeof e.accountId === "string") &&
+    validRecordMeta(e)
+  );
+}
+export function validRecordMeta(e: {
+  debtEventId?: unknown;
+  importKeys?: unknown;
+  importBatchId?: unknown;
+}) {
+  return (
+    (e.debtEventId === undefined || typeof e.debtEventId === "string") &&
+    (e.importBatchId === undefined || typeof e.importBatchId === "string") &&
+    (e.importKeys === undefined ||
+      (Array.isArray(e.importKeys) &&
+        e.importKeys.length <= 1000 &&
+        e.importKeys.every(
+          (k) => typeof k === "string" && k.length > 0 && k.length <= 100,
+        )))
   );
 }
 export function isCard(x: unknown): x is CardAccount {
