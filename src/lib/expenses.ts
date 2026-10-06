@@ -1,0 +1,10 @@
+export const categories = ['Food', 'Transport', 'Shopping', 'Home', 'Health', 'Other'] as const;
+export const paymentMethods = ['Cash', 'Card', 'Bank'] as const;
+export const currencies = ['NPR', 'INR', 'USD'] as const;
+export type Currency = typeof currencies[number];
+export type Expense = { id: string; amountMinor: number; currency: Currency; category: typeof categories[number]; paymentMethod: typeof paymentMethods[number]; note: string; date: string; createdAt: string; updatedAt: string; userId: string | null };
+export function localDate(date = new Date()) { return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`; }
+export function parseAmount(value: string) { if (!/^\d+(\.\d{1,2})?$/.test(value)) throw new Error('Enter a positive amount with up to two decimals.'); const amount = Math.round(Number(value)*100); if (!Number.isSafeInteger(amount) || amount <= 0 || amount > 99999999999) throw new Error('Amount must be between 0.01 and 999,999,999.99.'); return amount; }
+export function money(amountMinor: number, currency: Currency = 'NPR') { return new Intl.NumberFormat('en-NP', {style:'currency',currency, currencyDisplay:'code',maximumFractionDigits:2}).format(amountMinor/100); }
+export function isExpense(x: unknown): x is Expense { if(!x || typeof x !== 'object') return false; const e=x as Expense; return typeof e.id==='string' && Number.isSafeInteger(e.amountMinor) && e.amountMinor>0 && currencies.includes(e.currency) && categories.includes(e.category) && paymentMethods.includes(e.paymentMethod) && typeof e.note==='string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && typeof e.createdAt==='string' && typeof e.updatedAt==='string' && (e.userId===null || typeof e.userId==='string'); }
+export function totals(expenses: Expense[], today: string, currency: Currency) { const selected=expenses.filter(e=>e.currency===currency); return {today:selected.filter(e=>e.date===today).reduce((s,e)=>s+e.amountMinor,0),month:selected.filter(e=>e.date.slice(0,7)===today.slice(0,7)).reduce((s,e)=>s+e.amountMinor,0)}; }
