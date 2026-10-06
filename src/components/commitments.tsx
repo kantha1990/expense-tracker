@@ -1,23 +1,587 @@
-'use client';
-import {useEffect,useState} from 'react';
-import {CreditCard, CalendarClock, Plus, Trash2} from 'lucide-react';
-import {categories,Category,CardAccount,cardBalance,Currency,Expense,Ledger,localDate,money,nextMonthlyDate,parseAmount,paymentMethods,payRecurring,Recurring,subcategories} from '@/lib/expenses';
-import {readLedger,writeLedger} from '@/lib/storage';
-export default function Commitments({currency,revision,onChange}:{currency:Currency;revision:number;onChange:(expenses:Expense[],message:string)=>void}){
- const [ledger,setLedger]=useState<Ledger>({version:2,expenses:[],cards:[],recurring:[]}),[error,setError]=useState('');
- const [cardName,setCardName]=useState(''),[opening,setOpening]=useState('0'),[cardDue,setCardDue]=useState('15');
- const [name,setName]=useState(''),[amount,setAmount]=useState(''),[category,setCategory]=useState<Category>('EMI'),[subcategory,setSubcategory]=useState('Vehicle loan'),[date,setDate]=useState(localDate()),[remaining,setRemaining]=useState(''),[interest,setInterest]=useState('0'),[method,setMethod]=useState<typeof paymentMethods[number]>('Bank'),[cardId,setCardId]=useState('');
- const [paymentCard,setPaymentCard]=useState(''),[repayment,setRepayment]=useState('');
- useEffect(()=>{try{setLedger(readLedger());setError('');}catch(e){setError((e as Error).message);}},[revision]);
- const cards=ledger.cards.filter(c=>c.currency===currency),recurring=ledger.recurring.filter(r=>r.currency===currency);
- function change(fn:(s:Ledger)=>Ledger,message:string){try{const next=fn(readLedger());writeLedger(next);setLedger(next);setError('');onChange(next.expenses,message);return true;}catch(e){setError((e as Error).message||'Could not save. Check device storage.');return false;}}
- function addCard(e:React.FormEvent){e.preventDefault();try{const balance=opening==='0'||opening==='0.00'?0:parseAmount(opening);const c:CardAccount={id:crypto.randomUUID(),name:cardName.trim(),currency,openingBalanceMinor:balance,dueDay:Number(cardDue)};if(!c.name)throw Error('Enter a card name.');if(change(s=>({...s,cards:[...s.cards,c]}),'Credit card added.')){setCardName('');setOpening('0');}}catch(e){setError((e as Error).message);}}
- function addRecurring(e:React.FormEvent){e.preventDefault();try{const total=parseAmount(amount),fee=category==='EMI'&&interest!=='0'&&interest!=='0.00'?parseAmount(interest):0;if(fee>total)throw Error('Interest cannot exceed the EMI amount.');if(remaining&&(!/^\d+$/.test(remaining)||Number(remaining)<1||Number(remaining)>1200))throw Error('Enter 1–1200 remaining payments.');if(method==='Credit Card'&&!cards.some(c=>c.id===cardId))throw Error('Select a credit card.');const r:Recurring={id:crypto.randomUUID(),name:name.trim(),amountMinor:total,currency,category,subcategory,paymentMethod:method,nextDue:date,dueDay:Number(date.slice(-2)),remaining:remaining?Number(remaining):null,interestMinor:fee,cardId:method==='Credit Card'?cardId:undefined};if(!r.name)throw Error('Enter a payment name.');if(change(s=>({...s,recurring:[...s.recurring,r]}),'Monthly payment scheduled.')){setName('');setAmount('');}}catch(e){setError((e as Error).message);}}
- function payCard(e:React.FormEvent){e.preventDefault();try{const total=parseAmount(repayment);if(change(s=>{const card=s.cards.find(c=>c.id===paymentCard&&c.currency===currency);if(!card)throw Error('Select a credit card.');if(total>Math.max(0,cardBalance(card,s.expenses)))throw Error('Payment exceeds the tracked outstanding balance.');const now=new Date().toISOString();return {...s,expenses:[...s.expenses,{id:crypto.randomUUID(),amountMinor:total,currency,category:'Other',subcategory:'Credit card repayment',paymentMethod:'Bank',note:`${card.name} bill payment`,date:localDate(),createdAt:now,updatedAt:now,userId:null,kind:'transfer',cardId:card.id}]};},'Card repayment saved. Spending totals are unchanged.'))setRepayment('');}catch(e){setError((e as Error).message);}}
- return <section className="commitments"><div className="section-title"><h2>Cards & monthly payments</h2><span>{currency}</span></div><p className="section-help">Keep bills in view. Reminders appear here when you open Kharcha.</p>{error&&<div className="alert" role="alert">{error}</div>}
- <div className="commitment-grid"><div className="finance-box"><h3><CreditCard size={18}/>Credit cards</h3>{cards.length===0?<p className="muted">Add a card to track purchases and repayments.</p>:cards.map(c=>{const balance=cardBalance(c,ledger.expenses);return <div className="finance-entry" key={c.id}><div><strong>{c.name}</strong><span>Bill due on day {c.dueDay} · {balance<0?'Credit balance':'Outstanding'}</span></div><strong>{money(Math.abs(balance),currency)}</strong><button aria-label={`Delete ${c.name} card`} onClick={()=>{if(confirm('Remove this card? Cards linked to transactions or schedules cannot be removed.'))change(s=>{if(s.expenses.some(e=>e.cardId===c.id)||s.recurring.some(r=>r.cardId===c.id))throw Error('This card is linked to existing transactions or schedules.');return {...s,cards:s.cards.filter(x=>x.id!==c.id)};},'Card removed.');}}><Trash2 size={15}/></button></div>;})}
- <details><summary><Plus size={15}/> Add credit card</summary><form className="finance-form" onSubmit={addCard}><label>Card name<input required maxLength={60} placeholder="e.g. Nabil card" value={cardName} onChange={e=>setCardName(e.target.value)}/></label><div className="form-row"><label>Opening outstanding ({currency})<input required inputMode="decimal" value={opening} onChange={e=>setOpening(e.target.value)}/></label><label>Monthly due day<input required type="number" min="1" max="31" value={cardDue} onChange={e=>setCardDue(e.target.value)}/></label></div><p className="muted">Opening balance should exclude purchases already entered here. No card number required.</p><button className="primary">Add card</button></form></details>
- {cards.length>0&&<details><summary><CreditCard size={15}/> Pay credit card bill</summary><form className="finance-form" onSubmit={payCard}><label>Credit card<select aria-label="Credit card" required value={paymentCard} onChange={e=>setPaymentCard(e.target.value)}><option value="">Select card</option>{cards.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Payment amount ({currency})<input required inputMode="decimal" value={repayment} onChange={e=>setRepayment(e.target.value)}/></label><p className="muted">Recorded as a Bank transfer today. Purchases already count as spending.</p><button className="primary">Record repayment</button></form></details>}</div>
- <div className="finance-box"><h3><CalendarClock size={18}/>EMI & recurring bills</h3>{recurring.length===0?<p className="muted">Schedule rent, loans, utilities and subscriptions.</p>:recurring.sort((a,b)=>a.nextDue.localeCompare(b.nextDue)).map(r=><div className="schedule-entry" key={r.id}><div className="finance-entry"><div><strong>{r.name}</strong><span className={r.nextDue<=localDate()?'due':''}>{r.nextDue<localDate()?'Overdue':r.nextDue===localDate()?'Due today':'Due'} · {r.nextDue}{r.remaining!==null?` · ${r.remaining} payments left`:''}</span></div><strong>{money(r.amountMinor,currency)}</strong></div>{r.category==='EMI'&&<p className="split">Principal {money(r.amountMinor-r.interestMinor,currency)} · Interest {money(r.interestMinor,currency)}</p>}<div className="schedule-actions"><button className="outline" disabled={r.nextDue>localDate()} onClick={()=>{if(confirm(`Record ${r.name} as paid today? This adds one expense and advances its schedule.`))change(s=>payRecurring(s,r.id,localDate()),'Payment recorded and next due date updated.');}}>Mark paid</button><button className="text-button" onClick={()=>{if(confirm('Remove this schedule? Recorded payments will stay.'))change(s=>({...s,recurring:s.recurring.filter(x=>x.id!==r.id)}),'Schedule removed.');}}>Remove schedule</button></div></div>)}
- <details><summary><Plus size={15}/> Add monthly EMI / bill</summary><form className="finance-form" onSubmit={addRecurring}><label>Name<input required maxLength={120} placeholder="e.g. Vehicle EMI" value={name} onChange={e=>setName(e.target.value)}/></label><div className="form-row"><label>Monthly amount ({currency})<input required inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)}/></label><label>Next due date<input type="date" required value={date} onChange={e=>setDate(e.target.value)}/></label></div><div className="form-row"><label>Category<select aria-label="Recurring category" value={category} onChange={e=>{const c=e.target.value as Category;setCategory(c);setSubcategory(subcategories[c][0]);}}>{categories.map(c=><option key={c}>{c}</option>)}</select></label><label>Subcategory<select aria-label="Recurring subcategory" value={subcategory} onChange={e=>setSubcategory(e.target.value)}>{subcategories[category].map(s=><option key={s}>{s}</option>)}</select></label></div><label>Remaining payments <span>(blank for ongoing)</span><input type="number" min="1" max="1200" value={remaining} onChange={e=>setRemaining(e.target.value)}/></label>{category==='EMI'&&<label>Interest within this EMI ({currency})<input inputMode="decimal" required value={interest} onChange={e=>setInterest(e.target.value)}/><span>Principal = EMI minus interest. This fixed split repeats monthly; confirm your lender’s breakdown.</span></label>}<label>Pay with<select aria-label="Recurring payment method" value={method} onChange={e=>setMethod(e.target.value as typeof method)}>{paymentMethods.map(m=><option key={m}>{m}</option>)}</select></label>{method==='Credit Card'&&<label>Credit card<select aria-label="Credit card for recurring payment" required value={cardId} onChange={e=>setCardId(e.target.value)}><option value="">Select card</option>{cards.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}<p className="muted">Scheduled amounts are not spending until you mark them paid. No background notifications.</p><button className="primary">Save monthly payment</button></form></details></div></div></section>;
+"use client";
+import { useEffect, useState } from "react";
+import { CreditCard, CalendarClock, Plus, Trash2 } from "lucide-react";
+import {
+  categories,
+  Category,
+  CardAccount,
+  cardBalance,
+  Currency,
+  Expense,
+  Ledger,
+  localDate,
+  money,
+  nextMonthlyDate,
+  parseAmount,
+  paymentMethods,
+  payRecurring,
+  Recurring,
+  subcategories,
+} from "@/lib/expenses";
+import DateField from "./date-field";
+import { compatibleAccounts } from "@/lib/finance";
+import { displayDate } from "@/lib/calendar";
+import { readLedger, writeLedger } from "@/lib/storage";
+export default function Commitments({
+  currency,
+  revision,
+  onChange,
+}: {
+  currency: Currency;
+  revision: number;
+  onChange: (expenses: Expense[], message: string) => void;
+}) {
+  const [ledger, setLedger] = useState<Ledger>({
+      version: 2,
+      expenses: [],
+      cards: [],
+      recurring: [],
+    }),
+    [error, setError] = useState("");
+  const [cardName, setCardName] = useState(""),
+    [opening, setOpening] = useState("0"),
+    [cardDue, setCardDue] = useState("15");
+  const [name, setName] = useState(""),
+    [amount, setAmount] = useState(""),
+    [category, setCategory] = useState<Category>("EMI"),
+    [subcategory, setSubcategory] = useState("Vehicle loan"),
+    [date, setDate] = useState(localDate()),
+    [remaining, setRemaining] = useState(""),
+    [interest, setInterest] = useState("0"),
+    [method, setMethod] = useState<(typeof paymentMethods)[number]>("Bank"),
+    [cardId, setCardId] = useState("");
+  const [paymentCard, setPaymentCard] = useState(""),
+    [repayment, setRepayment] = useState(""),
+    [payingAccount, setPayingAccount] = useState(""),
+    [scheduleAccount, setScheduleAccount] = useState("");
+  useEffect(() => {
+    try {
+      setLedger(readLedger());
+      setError("");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, [revision]);
+  const cards = ledger.cards.filter((c) => c.currency === currency),
+    recurring = ledger.recurring.filter((r) => r.currency === currency);
+  function change(fn: (s: Ledger) => Ledger, message: string) {
+    try {
+      const next = fn(readLedger());
+      writeLedger(next);
+      setLedger(next);
+      setError("");
+      onChange(next.expenses, message);
+      return true;
+    } catch (e) {
+      setError((e as Error).message || "Could not save. Check device storage.");
+      return false;
+    }
+  }
+  function addCard(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      const balance =
+        opening === "0" || opening === "0.00" ? 0 : parseAmount(opening);
+      const c: CardAccount = {
+        id: crypto.randomUUID(),
+        name: cardName.trim(),
+        currency,
+        openingBalanceMinor: balance,
+        dueDay: Number(cardDue),
+      };
+      if (!c.name) throw Error("Enter a card name.");
+      if (
+        change((s) => ({ ...s, cards: [...s.cards, c] }), "Credit card added.")
+      ) {
+        setCardName("");
+        setOpening("0");
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  function addRecurring(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      const total = parseAmount(amount),
+        fee =
+          category === "EMI" && interest !== "0" && interest !== "0.00"
+            ? parseAmount(interest)
+            : 0;
+      if (fee > total) throw Error("Interest cannot exceed the EMI amount.");
+      if (
+        remaining &&
+        (!/^\d+$/.test(remaining) ||
+          Number(remaining) < 1 ||
+          Number(remaining) > 1200)
+      )
+        throw Error("Enter 1–1200 remaining payments.");
+      if (method === "Credit Card" && !cards.some((c) => c.id === cardId))
+        throw Error("Select a credit card.");
+      const r: Recurring = {
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        amountMinor: total,
+        currency,
+        category,
+        subcategory,
+        paymentMethod: method,
+        nextDue: date,
+        dueDay: Number(date.slice(-2)),
+        remaining: remaining ? Number(remaining) : null,
+        interestMinor: fee,
+        cardId: method === "Credit Card" ? cardId : undefined,
+        accountId:
+          method === "Credit Card" ? undefined : scheduleAccount || undefined,
+      };
+      if (!r.name) throw Error("Enter a payment name.");
+      if (
+        change(
+          (s) => ({ ...s, recurring: [...s.recurring, r] }),
+          "Monthly payment scheduled.",
+        )
+      ) {
+        setName("");
+        setAmount("");
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  function payCard(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      const total = parseAmount(repayment);
+      if (
+        change((s) => {
+          const card = s.cards.find(
+            (c) => c.id === paymentCard && c.currency === currency,
+          );
+          if (!card) throw Error("Select a credit card.");
+          if (total > Math.max(0, cardBalance(card, s.expenses)))
+            throw Error("Payment exceeds the tracked outstanding balance.");
+          const now = new Date().toISOString();
+          return {
+            ...s,
+            expenses: [
+              ...s.expenses,
+              {
+                id: crypto.randomUUID(),
+                amountMinor: total,
+                currency,
+                category: "Other",
+                subcategory: "Credit card repayment",
+                paymentMethod: "Bank",
+                note: `${card.name} bill payment`,
+                date: localDate(),
+                createdAt: now,
+                updatedAt: now,
+                userId: null,
+                kind: "transfer",
+                cardId: card.id,
+                accountId: payingAccount || undefined,
+              },
+            ],
+          };
+        }, "Card repayment saved. Spending totals are unchanged.")
+      )
+        setRepayment("");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  return (
+    <section className="commitments">
+      <div className="section-title">
+        <h2>Cards & monthly payments</h2>
+        <span>{currency}</span>
+      </div>
+      <p className="section-help">
+        Keep bills in view. Reminders appear here when you open Kharcha.
+      </p>
+      {error && (
+        <div className="alert" role="alert">
+          {error}
+        </div>
+      )}
+      <div className="commitment-grid">
+        <div className="finance-box">
+          <h3>
+            <CreditCard size={18} />
+            Credit cards
+          </h3>
+          {cards.length === 0 ? (
+            <p className="muted">
+              Add a card to track purchases and repayments.
+            </p>
+          ) : (
+            cards.map((c) => {
+              const balance = cardBalance(c, ledger.expenses);
+              return (
+                <div className="finance-entry" key={c.id}>
+                  <div>
+                    <strong>{c.name}</strong>
+                    <span>
+                      Bill due on day {c.dueDay} ·{" "}
+                      {balance < 0 ? "Credit balance" : "Outstanding"}
+                    </span>
+                  </div>
+                  <strong>{money(Math.abs(balance), currency)}</strong>
+                  <button
+                    aria-label={`Delete ${c.name} card`}
+                    onClick={() => {
+                      if (
+                        confirm(
+                          "Remove this card? Cards linked to transactions or schedules cannot be removed.",
+                        )
+                      )
+                        change((s) => {
+                          if (
+                            s.expenses.some((e) => e.cardId === c.id) ||
+                            s.recurring.some((r) => r.cardId === c.id)
+                          )
+                            throw Error(
+                              "This card is linked to existing transactions or schedules.",
+                            );
+                          return {
+                            ...s,
+                            cards: s.cards.filter((x) => x.id !== c.id),
+                          };
+                        }, "Card removed.");
+                    }}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              );
+            })
+          )}
+          <details>
+            <summary>
+              <Plus size={15} /> Add credit card
+            </summary>
+            <form className="finance-form" onSubmit={addCard}>
+              <label>
+                Card name
+                <input
+                  required
+                  maxLength={60}
+                  placeholder="e.g. Nabil card"
+                  value={cardName}
+                  onChange={(e) => setCardName(e.target.value)}
+                />
+              </label>
+              <div className="form-row">
+                <label>
+                  Opening outstanding ({currency})
+                  <input
+                    required
+                    inputMode="decimal"
+                    value={opening}
+                    onChange={(e) => setOpening(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Monthly due day
+                  <input
+                    required
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={cardDue}
+                    onChange={(e) => setCardDue(e.target.value)}
+                  />
+                </label>
+              </div>
+              <p className="muted">
+                Opening balance should exclude purchases already entered here.
+                No card number required.
+              </p>
+              <button className="primary">Add card</button>
+            </form>
+          </details>
+          {cards.length > 0 && (
+            <details>
+              <summary>
+                <CreditCard size={15} /> Pay credit card bill
+              </summary>
+              <form className="finance-form" onSubmit={payCard}>
+                <label>
+                  Credit card
+                  <select
+                    aria-label="Credit card"
+                    required
+                    value={paymentCard}
+                    onChange={(e) => setPaymentCard(e.target.value)}
+                  >
+                    <option value="">Select card</option>
+                    {cards.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Payment amount ({currency})
+                  <input
+                    required
+                    inputMode="decimal"
+                    value={repayment}
+                    onChange={(e) => setRepayment(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Paying bank account
+                  <select
+                    aria-label="Card repayment bank account"
+                    value={payingAccount}
+                    onChange={(e) => setPayingAccount(e.target.value)}
+                  >
+                    <option value="">Unlinked — liability only</option>
+                    {compatibleAccounts(ledger, currency, "Bank").map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="muted">
+                  Recorded as a Bank transfer today. Purchases already count as
+                  spending.
+                </p>
+                <button className="primary">Record repayment</button>
+              </form>
+            </details>
+          )}
+        </div>
+        <div className="finance-box">
+          <h3>
+            <CalendarClock size={18} />
+            EMI & recurring bills
+          </h3>
+          {recurring.length === 0 ? (
+            <p className="muted">
+              Schedule rent, loans, utilities and subscriptions.
+            </p>
+          ) : (
+            recurring
+              .sort((a, b) => a.nextDue.localeCompare(b.nextDue))
+              .map((r) => (
+                <div className="schedule-entry" key={r.id}>
+                  <div className="finance-entry">
+                    <div>
+                      <strong>{r.name}</strong>
+                      <span className={r.nextDue <= localDate() ? "due" : ""}>
+                        {r.nextDue < localDate()
+                          ? "Overdue"
+                          : r.nextDue === localDate()
+                            ? "Due today"
+                            : "Due"}{" "}
+                        · {displayDate(r.nextDue, ledger.dateDisplay)}
+                        {r.remaining !== null
+                          ? ` · ${r.remaining} payments left`
+                          : ""}
+                      </span>
+                    </div>
+                    <strong>{money(r.amountMinor, currency)}</strong>
+                  </div>
+                  {r.category === "EMI" && (
+                    <p className="split">
+                      Principal{" "}
+                      {money(r.amountMinor - r.interestMinor, currency)} ·
+                      Interest {money(r.interestMinor, currency)}
+                    </p>
+                  )}
+                  <div className="schedule-actions">
+                    <button
+                      className="outline"
+                      disabled={r.nextDue > localDate()}
+                      onClick={() => {
+                        if (
+                          confirm(
+                            `Record ${r.name} as paid today? This adds one expense and advances its schedule.`,
+                          )
+                        )
+                          change(
+                            (s) => payRecurring(s, r.id, localDate()),
+                            "Payment recorded and next due date updated.",
+                          );
+                      }}
+                    >
+                      Mark paid
+                    </button>
+                    <button
+                      className="text-button"
+                      onClick={() => {
+                        if (
+                          confirm(
+                            "Remove this schedule? Recorded payments will stay.",
+                          )
+                        )
+                          change(
+                            (s) => ({
+                              ...s,
+                              recurring: s.recurring.filter(
+                                (x) => x.id !== r.id,
+                              ),
+                            }),
+                            "Schedule removed.",
+                          );
+                      }}
+                    >
+                      Remove schedule
+                    </button>
+                  </div>
+                </div>
+              ))
+          )}
+          <details>
+            <summary>
+              <Plus size={15} /> Add monthly EMI / bill
+            </summary>
+            <form className="finance-form" onSubmit={addRecurring}>
+              <label>
+                Name
+                <input
+                  required
+                  maxLength={120}
+                  placeholder="e.g. Vehicle EMI"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </label>
+              <div className="form-row">
+                <label>
+                  Monthly amount ({currency})
+                  <input
+                    required
+                    inputMode="decimal"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                  />
+                </label>
+                <DateField
+                  label="Next due date"
+                  value={date}
+                  onChange={setDate}
+                  mode={ledger.dateDisplay}
+                />
+              </div>
+              <div className="form-row">
+                <label>
+                  Category
+                  <select
+                    aria-label="Recurring category"
+                    value={category}
+                    onChange={(e) => {
+                      const c = e.target.value as Category;
+                      setCategory(c);
+                      setSubcategory(subcategories[c][0]);
+                    }}
+                  >
+                    {categories.map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Subcategory
+                  <select
+                    aria-label="Recurring subcategory"
+                    value={subcategory}
+                    onChange={(e) => setSubcategory(e.target.value)}
+                  >
+                    {subcategories[category].map((s) => (
+                      <option key={s}>{s}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label>
+                Remaining payments <span>(blank for ongoing)</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="1200"
+                  value={remaining}
+                  onChange={(e) => setRemaining(e.target.value)}
+                />
+              </label>
+              {category === "EMI" && (
+                <label>
+                  Interest within this EMI ({currency})
+                  <input
+                    inputMode="decimal"
+                    required
+                    value={interest}
+                    onChange={(e) => setInterest(e.target.value)}
+                  />
+                  <span>
+                    Principal = EMI minus interest. This fixed split repeats
+                    monthly; confirm your lender’s breakdown.
+                  </span>
+                </label>
+              )}
+              <label>
+                Pay with
+                <select
+                  aria-label="Recurring payment method"
+                  value={method}
+                  onChange={(e) => {
+                    setMethod(e.target.value as typeof method);
+                    setScheduleAccount("");
+                  }}
+                >
+                  {paymentMethods.map((m) => (
+                    <option key={m}>{m}</option>
+                  ))}
+                </select>
+              </label>
+              {method !== "Credit Card" && (
+                <label>
+                  Paying account
+                  <select
+                    aria-label="Scheduled paying account"
+                    value={scheduleAccount}
+                    onChange={(e) => setScheduleAccount(e.target.value)}
+                  >
+                    <option value="">Unlinked — spending only</option>
+                    {compatibleAccounts(ledger, currency, method).map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {method === "Credit Card" && (
+                <label>
+                  Credit card
+                  <select
+                    aria-label="Credit card for recurring payment"
+                    required
+                    value={cardId}
+                    onChange={(e) => setCardId(e.target.value)}
+                  >
+                    <option value="">Select card</option>
+                    {cards.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <p className="muted">
+                Scheduled amounts are not spending until you mark them paid. No
+                background notifications.
+              </p>
+              <button className="primary">Save monthly payment</button>
+            </form>
+          </details>
+        </div>
+      </div>
+    </section>
+  );
 }
