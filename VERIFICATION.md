@@ -1,9 +1,9 @@
-# V1 verification
+# Kharcha V2 verification
 
-- `npm run build`: PASS (Next.js 16.3.8 production compilation, TypeScript checks, static page generation).
-- `npm run typecheck`: PASS.
-- `npm test`: PASS, 4 domain/storage tests covering minor-unit input, date/month/currency totals, local dates and storage roundtrip/corruption preservation.
-- Production HTTP checks: dashboard, manifest, service worker, 192 icon and 512 icon return HTTP 200.
-- Browser interaction, visual layout and offline/install flows: not automatically verified. Playwright browser download failed in the execution environment. Test on an HTTPS deployment with Android Chrome and iOS Safari before release.
-- GitHub installation access confirmed by a successful repository write on 6 October 2026.
+- Production static export build: PASS (compilation, TypeScript and page generation).
+- Unit tests: PASS, 11 tests covering precise minor units, currency/date aggregation, corruption preservation, V1 migration, credit repayment exclusion, recurring EMI atomic update/month-end logic, receipt totals after VAT/discount, Nepali digits, and ambiguous/BS dates.
+- Browser bill scan: printed English fixture recognized grand total NPR 847.50 and populated the amount field using local worker/WASM/language assets.
+- Browser tests: PASS for mobile fit, actual local English OCR scan-to-amount review/save, edit/reload persistence, card purchase/repayment accounting, EMI paid/schedule advance, and desktop fit. No runtime page errors.
+- English + Nepali OCR language assets included; Nepali-number receipt parsing tested. Real Nepali photo recognition still depends on print quality and has not been benchmarked.
+- No payment execution, background notifications or cloud sync. Due indicators require opening the app. Manually verify recognition and EMI split against source documents.
 - No secrets or environment files included.
