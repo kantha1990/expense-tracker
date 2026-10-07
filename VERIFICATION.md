@@ -13,3 +13,11 @@ Verified 6 October 2026 against the production static export.
 - English+Nepali language assets included; real Nepali photo recognition accuracy remains unbenchmarked. Users must review OCR suggestions, dates and loan splits.
 - Manual recorded balances and planning estimates are not bank-verified. No live bank/wallet sync, account authentication, cloud backup, family sharing, payment execution or background notifications.
 - No credentials, environment files, test ledgers, private receipts or statement samples are committed.
+
+## Bill scanning and quick-access update — 7 October 2026
+
+- Production build and TypeScript passed; all 42 domain/storage/parser tests passed. New cases cover `sgrandtotal`, joined/spaced labels, O/0 and I/l/1 label confusion, next-line totals, Nepali numbers, Indian grouping, percentages, rejected quantity/tax/change totals and conflicting readings.
+- Actual image-preparation code and local Tesseract sparse-text OCR recognized a synthetic low-contrast printed bill with a separate `GrandTotal`/`NPR 847.50` line; exact suggested amount was 847.50. Synthetic validation does not benchmark the user's unprovided photo or real Nepali photo accuracy.
+- Scan candidates still require review. An unsuccessful replacement scan clears the previous suggested amount. A retry failure preserves the first reading; cancellation/90-second deadline remain in place.
+- Layout: shorter headings; visible Add expense/Scan bill buttons; collapsed scanner tips and dashboard estimate detail; larger form controls, labels and touch targets. Existing tabs and ledger storage remain intact.
+- Browser UI automation was unavailable for this update. Earlier V4 browser results above describe the prior release; this update was checked through source review, TypeScript, production compilation and actual local image/OCR execution.

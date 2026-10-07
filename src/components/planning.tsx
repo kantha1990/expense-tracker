@@ -128,13 +128,28 @@ export default function Planning({
         </div>
         <ShieldCheck size={30} />
       </div>
-      <p className="section-help">
-        An estimate from tracked accounts, after reserving all tracked card
-        balances, unpaid scheduled bills through{" "}
-        {displayDate(summary.period.end, ledger.dateDisplay)}, borrowed
-        principal due by then, and savings. Expected salary is excluded until
-        received.
-      </p>
+      {compact ? (
+        <details className="plan-explanation">
+          <summary>How this estimate works</summary>
+          <p className="section-help">
+            An estimate from tracked accounts, after reserving all tracked card
+            balances, unpaid scheduled bills through{" "}
+            {displayDate(summary.period.end, ledger.dateDisplay)}, borrowed
+            principal due by then, and savings. Expected salary is excluded
+            until received.
+          </p>
+        </details>
+      ) : (
+        <>
+          <p className="section-help">
+            An estimate from tracked accounts, after reserving all tracked card
+            balances, unpaid scheduled bills through{" "}
+            {displayDate(summary.period.end, ledger.dateDisplay)}, borrowed
+            principal due by then, and savings. Expected salary is excluded
+            until received.
+          </p>
+        </>
+      )}
       {summary.unlinked > 0 && (
         <p className="coverage-warning">
           {summary.unlinked} expense{summary.unlinked > 1 ? "s are" : " is"} not
@@ -148,26 +163,30 @@ export default function Planning({
           date. Their principal is not reserved in this estimate.
         </p>
       )}
-      <div className="plan-metrics">
-        <div>
-          <span>Recorded balances</span>
-          <strong>{money(summary.cash, currency)}</strong>
-        </div>
-        <div>
-          <span>Card reserve</span>
-          <strong>{money(summary.outstanding, currency)}</strong>
-        </div>
-        <div>
-          <span>Unpaid bills & due Udharo</span>
-          <strong>
-            {money(summary.bills + summary.borrowedDue, currency)}
-          </strong>
-        </div>
-        <div>
-          <span>Savings reserve</span>
-          <strong>{money(p.savingsReserveMinor, currency)}</strong>
-        </div>
-      </div>
+      {!compact && (
+        <>
+          <div className="plan-metrics">
+            <div>
+              <span>Recorded balances</span>
+              <strong>{money(summary.cash, currency)}</strong>
+            </div>
+            <div>
+              <span>Card reserve</span>
+              <strong>{money(summary.outstanding, currency)}</strong>
+            </div>
+            <div>
+              <span>Unpaid bills & due Udharo</span>
+              <strong>
+                {money(summary.bills + summary.borrowedDue, currency)}
+              </strong>
+            </div>
+            <div>
+              <span>Savings reserve</span>
+              <strong>{money(p.savingsReserveMinor, currency)}</strong>
+            </div>
+          </div>
+        </>
+      )}
       {!compact && (
         <>
           <div className="budget-overview">

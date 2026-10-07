@@ -17,31 +17,83 @@ export function parseReceipt(raw: string): ReceiptSuggestion {
     .map((l) => l.trim())
     .filter(Boolean);
   const candidates: { label: string; amount: string; score: number }[] = [];
-  for (const line of lines) {
+  // Match labels separately from numbers: OCR often joins words or reads O as 0.
+  const labelText = (line: string) =>
+    line
+      .toLowerCase()
+      .replace(/!/g, "l")
+      .replace(/0/g, "o")
+      .replace(/1/g, "l")
+      .replace(/[^a-z\u0900-\u097f]/g, "");
+  function labelScore(line: string) {
+    const label = labelText(line);
     if (
-      /sub\s*total|tax\s*total|^\s*(vat|tax)\b|change|cash\s*tender|received|discount|balance\s*forward|बाँकी|छुट/i.test(
-        line,
+      /subtotal|subtota[lij]|taxtotal|totaltax|totalvat|totalsavings|totalqty|totalquantity|totalitems|totalunits|change|cashtender|cashreceived|amountreceived|discount|balanceforward|छुट|बाँकी/.test(
+        label,
+      ) ||
+      /^(vat|tax)\b/i.test(line)
+    )
+      return 0;
+    if (
+      /grandtota[lij]|grandtota$|net(total|amount)|amount(due|payable)|total(due|payable)|कुलजम्मा|तिर्नुपर्ने/.test(
+        label,
       )
     )
-      continue;
-    let score =
-      /grand\s*total|net\s*(total|amount)|amount\s*(due|payable)|total\s*(due|payable)|कुल\s*जम्मा|तिर्नुपर्ने/i.test(
-        line,
+      return 4;
+    if (/tota[lij]|जम्मा|कुल/.test(label)) return 2;
+    return 0;
+  }
+  function amountsIn(line: string) {
+    const found: string[] = [];
+    // Indian and western grouping; punctuation belongs to the entire token.
+    const normalized = line
+      .replace(/NPR|INR|USD|Rs\.?|रु\.?/gi, " ")
+      .replace(/\d[\dOoIl,.]*/g, (token) =>
+        token.replace(/[Oo]/g, "0").replace(/[Il]/g, "1"),
+      );
+    for (const match of normalized.matchAll(/\d[\d,.]*/g)) {
+      if (/^\s*%/.test(normalized.slice(match.index! + match[0].length)))
+        continue;
+      const token = match[0].replace(/[.,]$/, "");
+      if (
+        !/^(?:\d+|\d{1,3}(?:,\d{3})+|\d{1,2}(?:,\d{2})*,\d{3})(?:\.\d{1,2})?$/.test(
+          token,
+        )
       )
-        ? 3
-        : /\btotal\b|जम्मा|कुल/i.test(line)
-          ? 2
-          : 0;
-    if (!score) continue;
-    const amounts = [
-      ...line.matchAll(/(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?/g),
-    ];
-    const last = amounts.at(-1)?.[0];
-    if (last) {
-      const n = Number(last.replaceAll(",", ""));
-      if (n > 0 && n <= 999999999.99)
-        candidates.push({ label: line, amount: n.toFixed(2), score });
+        continue;
+      const n = Number(token.replaceAll(",", ""));
+      if (n > 0 && n <= 999999999.99) found.push(n.toFixed(2));
     }
+    return found;
+  }
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const score = labelScore(line);
+    if (!score) continue;
+    // Ignore total quantities/counts even when OCR adds punctuation.
+    const amounts = amountsIn(line);
+    let amount = amounts.at(-1),
+      label = line;
+    // A label-only line can be followed by a currency/amount-only line.
+    // Never cross another label, item, date or tax line looking for a number.
+    if (!amount) {
+      for (let j = i + 1; j <= Math.min(i + 2, lines.length - 1); j++) {
+        const next = lines[j];
+        const valueOnly = next.replace(
+          /NPR|INR|USD|Rs\.?|रु\.?|[\s:$=₹]/gi,
+          "",
+        );
+        if (!valueOnly) continue;
+        if (!/^[\dOoIl,.]+$/.test(valueOnly)) break;
+        const values = amountsIn(next);
+        if (values.length === 1) {
+          amount = values[0];
+          label += " · " + next;
+        }
+        break;
+      }
+    }
+    if (amount) candidates.push({ label, amount, score });
   }
   candidates.sort((a, b) => b.score - a.score);
   const unique = candidates.filter(

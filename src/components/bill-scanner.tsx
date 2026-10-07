@@ -1,14 +1,18 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { prepareReceiptImage } from "@/lib/receipt-image";
 import { Camera, Upload, ScanLine } from "lucide-react";
 import { parseReceipt, ReceiptSuggestion } from "@/lib/receipts";
 export default function BillScanner({
   onResult,
   onBusy,
+  startExpanded = false,
 }: {
+  startExpanded?: boolean;
   onResult: (result: ReceiptSuggestion) => void;
   onBusy: (busy: boolean) => void;
 }) {
+  const [expanded, setExpanded] = useState(startExpanded);
   const [language, setLanguage] = useState("eng"),
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState(""),
@@ -48,10 +52,12 @@ export default function BillScanner({
       setError("Choose an image smaller than 15 MB.");
       return;
     }
+    setExpanded(true);
     setBusy(true);
     onBusy(true);
     setError("");
     setResult(null);
+
     setPreview(URL.createObjectURL(file));
     setProgress("Preparing bill scanner…");
     let worker: import("tesseract.js").Worker | undefined;
@@ -73,6 +79,16 @@ export default function BillScanner({
       stop();
     }, 90000);
     try {
+      let scanImage: File | Blob = file;
+      try {
+        scanImage = await Promise.race([
+          prepareReceiptImage(file, false),
+          cancelled,
+        ]);
+      } catch {
+        if (stopped) return;
+      }
+      if (stopped || !mounted.current) return;
       const { createWorker, PSM } = await import("tesseract.js");
       if (!mounted.current) return;
       worker = await Promise.race([
@@ -97,12 +113,35 @@ export default function BillScanner({
       ]);
       if (stopped || !mounted.current) return;
       await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO });
-      const { data } = await Promise.race([
-        worker.recognize(file, { rotateAuto: true }),
+      let { data } = await Promise.race([
+        worker.recognize(scanImage, { rotateAuto: true }),
         cancelled,
       ]);
       if (stopped || !mounted.current) return;
-      const suggestion = parseReceipt(data.text);
+      let suggestion = parseReceipt(data.text);
+      if (!suggestion.amount || data.confidence < 45) {
+        setProgress("Looking again for Grand Total or Total…");
+        try {
+          const prepared = await Promise.race([
+            prepareReceiptImage(file),
+            cancelled,
+          ]);
+          if (stopped || !mounted.current) return;
+          await worker.setParameters({
+            tessedit_pageseg_mode: PSM.SPARSE_TEXT,
+          });
+          const retry = await Promise.race([
+            worker.recognize(prepared, { rotateAuto: true }),
+            cancelled,
+          ]);
+          if (stopped || !mounted.current) return;
+          // Keep both readings for review instead of guessing from the largest number.
+          suggestion = parseReceipt(data.text + "\n" + retry.data.text);
+        } catch {
+          if (stopped || !mounted.current) return;
+          // Preserve the first reading if image preparation is unsupported.
+        }
+      }
       setResult(suggestion);
       onResult(suggestion);
       setProgress("Scan ready. Review the amount and details before saving.");
@@ -132,39 +171,55 @@ export default function BillScanner({
         <strong>Scan a bill</strong>
         <span>On-device OCR</span>
       </div>
-      <p>
-        Use a clear printed bill photo. Scan results need your review. The photo
-        stays on this device and is not saved.
-      </p>
-      <label>
-        Bill language
-        <select
-          value={language}
-          disabled={busy}
-          onChange={(e) => setLanguage(e.target.value)}
-        >
-          <option value="eng">English</option>
-          <option value="eng+nep">English + Nepali</option>
-        </select>
-      </label>
-      <div className="scan-actions">
+      {!expanded && (
         <button
           type="button"
-          className="outline"
-          disabled={busy}
-          onClick={() => camera.current?.click()}
+          className="outline scanner-open"
+          onClick={() => setExpanded(true)}
         >
-          <Camera size={16} /> Take photo
+          <Camera size={16} /> Scan or upload a bill
         </button>
-        <button
-          type="button"
-          className="outline"
-          disabled={busy}
-          onClick={() => upload.current?.click()}
-        >
-          <Upload size={16} /> Upload bill
-        </button>
-      </div>
+      )}
+      {expanded && (
+        <>
+          <div className="scan-actions">
+            <button
+              type="button"
+              className="outline"
+              disabled={busy}
+              onClick={() => camera.current?.click()}
+            >
+              <Camera size={16} /> Take photo
+            </button>
+            <button
+              type="button"
+              className="outline"
+              disabled={busy}
+              onClick={() => upload.current?.click()}
+            >
+              <Upload size={16} /> Upload bill
+            </button>
+          </div>
+          <details className="scanner-options">
+            <summary>Language & photo tips</summary>
+            <p>
+              Keep the whole total line in frame. The photo stays on this
+              device; check the suggested amount before saving.
+            </p>
+            <label>
+              Bill language
+              <select
+                value={language}
+                disabled={busy}
+                onChange={(e) => setLanguage(e.target.value)}
+              >
+                <option value="eng">English</option>
+                <option value="eng+nep">English + Nepali</option>
+              </select>
+            </label>
+          </details>
+        </>
+      )}
       <input
         hidden
         ref={camera}

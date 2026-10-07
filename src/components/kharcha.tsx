@@ -12,6 +12,7 @@ import {
   House,
   LayoutDashboard,
   Leaf,
+  Camera,
   Plus,
   ReceiptText,
   ShoppingBag,
@@ -85,6 +86,7 @@ export default function Kharcha() {
     [editing, setEditing] = useState<Expense | null>(null),
     [revision, setRevision] = useState(0),
     [scanEpoch, setScanEpoch] = useState(0),
+    [scanMode, setScanMode] = useState(false),
     [scanned, setScanned] = useState(false),
     [scanBusy, setScanBusy] = useState(false),
     [reviewed, setReviewed] = useState(false);
@@ -176,7 +178,8 @@ export default function Kharcha() {
           b.date.localeCompare(a.date) ||
           b.createdAt.localeCompare(a.createdAt),
       );
-  function open() {
+  function open(forScan = false) {
+    setScanMode(forScan);
     setEditing(null);
     setAmount("");
     setNote("");
@@ -193,7 +196,7 @@ export default function Kharcha() {
     setScanEpoch((x) => x + 1);
     setError("");
     dialog.current?.showModal();
-    amountInput.current?.focus();
+    if (!forScan) amountInput.current?.focus();
   }
   function edit(e: Expense) {
     if (e.debtEventId) {
@@ -225,7 +228,7 @@ export default function Kharcha() {
     dialog.current?.showModal();
   }
   function scannedBill(r: ReceiptSuggestion) {
-    if (r.amount) setAmount(r.amount);
+    setAmount(r.amount);
     if (r.merchant) setNote(r.merchant);
     if (r.date && r.date <= localDate()) setDate(r.date);
     if (r.currency) setCurrency(r.currency);
@@ -491,33 +494,32 @@ export default function Kharcha() {
         <div className="content">
           <section className="heading">
             <div>
-              <div className="eyebrow">EVERYDAY SPENDING, MADE SIMPLE</div>
               <h1>
                 {tab === "overview"
-                  ? "Your money, at a glance."
+                  ? "Overview"
                   : tab === "plan"
-                    ? "Make room for what matters."
+                    ? "Budget & bills"
                     : tab === "money"
-                      ? "All your money, together."
-                      : "Every little expense."}
+                      ? "Accounts"
+                      : "Activity"}
               </h1>
-              <p>
-                {tab === "overview"
-                  ? "A clear view of what you spend. More room for what matters."
-                  : tab === "plan"
-                    ? "Plan your budget, bills and savings until payday."
-                    : tab === "money"
-                      ? "Track cash, banks, wallets, income and transfers."
-                      : "Your spending story, one transaction at a time."}
-              </p>
             </div>
-            <button
-              className="primary desktop-add"
-              disabled={!ready || blocked}
-              onClick={open}
-            >
-              <Plus size={18} /> Add expense
-            </button>
+            <div className="quick-actions">
+              <button
+                className="primary"
+                disabled={!ready || blocked}
+                onClick={() => open()}
+              >
+                <Plus size={18} /> Add expense
+              </button>
+              <button
+                className="outline"
+                disabled={!ready || blocked}
+                onClick={() => open(true)}
+              >
+                <Camera size={18} /> Scan bill
+              </button>
+            </div>
           </section>
           {error && (
             <div className="alert" role="alert">
@@ -699,7 +701,7 @@ export default function Kharcha() {
                       </p>
                       <button
                         className="outline"
-                        onClick={open}
+                        onClick={() => open()}
                         disabled={blocked}
                       >
                         <Plus size={17} /> Add your first expense
@@ -829,7 +831,7 @@ export default function Kharcha() {
         <button
           className="add-fab"
           aria-label="Add expense"
-          onClick={open}
+          onClick={() => open()}
           disabled={!ready || blocked}
         >
           <Plus size={25} />
@@ -880,6 +882,7 @@ export default function Kharcha() {
           {!editing && (
             <BillScanner
               key={scanEpoch}
+              startExpanded={scanMode}
               onResult={scannedBill}
               onBusy={setScanBusy}
             />
